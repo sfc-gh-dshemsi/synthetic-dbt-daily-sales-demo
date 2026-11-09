@@ -1,0 +1,23 @@
+name: synthetic_daily_sales_demo
+version: '1.0.0'
+config-version: 2
+profile: synthetic_daily_sales_demo
+
+model-paths: ["models"]
+test-paths: ["tests"]
+
+# Runtime inputs. Override per run with --vars, for example:
+#   --vars '{client_id: CLIENT_B, start_date: 2026-10-04, end_date: 2026-10-04}'
+vars:
+  client_id: null
+  start_date: '1900-01-01'
+  end_date: '2999-12-31'
+  # Planned failing test (tests/demo_order_amount_cap.sql) is off by default.
+  show_failing_test: false
+  max_order_amount: 50
+
+models:
+  synthetic_daily_sales_demo:
+    +materialized: view
+    client_daily_sales:
+      +materialized: table

@@ -1,0 +1,21 @@
+# dbt build output
+target/
+logs/
+dbt_packages/
+
+# OS
+.DS_Store
+
+# Secrets & credentials
+.env
+.env.*
+*.env
+!.env.example
+*.pem
+*.key
+*.p8
+credentials.json
+**/secrets/
+**/*secret*
+**/*credential*
+**/*password*

@@ -1,0 +1,55 @@
+version: 2
+
+sources:
+  - name: synthetic_orders
+    database: SYNTHETIC_DBT_DAILY_SALES_DEMO
+    schema: RAW
+    tables:
+      - name: orders
+        columns:
+          - name: order_id
+            data_tests:
+              - not_null
+              - unique
+
+models:
+  - name: stg_orders
+    description: Typed synthetic order rows, one row per order.
+    columns:
+      - name: order_id
+        data_tests:
+          - not_null
+          - unique
+      - name: client_id
+        data_tests:
+          - not_null
+      - name: order_date
+        data_tests:
+          - not_null
+  - name: client_daily_sales
+    description: One row per client and calendar date from synthetic orders.
+    columns:
+      - name: client_day_key
+        data_tests:
+          - not_null
+          - unique
+      - name: client_id
+        data_tests:
+          - not_null
+      - name: order_date
+        data_tests:
+          - not_null
+  - name: client_daily_sales_incremental
+    description: Incremental version of client_daily_sales; reruns replace one client/date slice.
+    columns:
+      - name: client_day_key
+        data_tests:
+          - not_null
+          - unique
+  - name: client_daily_sales_dt
+    description: Dynamic table version of client_daily_sales, refreshed by Snowflake.
+    columns:
+      - name: client_day_key
+        data_tests:
+          - not_null
+          - unique

@@ -1,0 +1,21 @@
+synthetic_daily_sales_demo:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: 'not needed'
+      user: 'not needed'
+      role: ACCOUNTADMIN
+      warehouse: COMPUTE_WH
+      database: SYNTHETIC_DBT_DAILY_SALES_DEMO
+      schema: DEV
+      threads: 4
+    prod:
+      type: snowflake
+      account: 'not needed'
+      user: 'not needed'
+      role: ACCOUNTADMIN
+      warehouse: COMPUTE_WH
+      database: SYNTHETIC_DBT_DAILY_SALES_DEMO
+      schema: PROD
+      threads: 4
