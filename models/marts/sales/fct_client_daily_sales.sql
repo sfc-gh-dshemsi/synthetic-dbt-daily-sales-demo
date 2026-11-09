@@ -4,5 +4,5 @@ select
     order_date,
     count(*) as order_count,
     sum(amount) as sales_amount
-from {{ ref('stg_orders') }}
+from {{ ref('int_orders_enriched') }}
 group by client_id, order_date

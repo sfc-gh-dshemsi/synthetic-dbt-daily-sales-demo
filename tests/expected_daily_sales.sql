@@ -9,7 +9,7 @@ with expected as (
         ('CLIENT_B', '2026-10-02', 1, 60.00)
 ), actual as (
     select client_id, order_date, order_count, sales_amount
-    from {{ ref('client_daily_sales') }}
+    from {{ ref('fct_client_daily_sales') }}
     -- The fixture covers the original six orders; setup/new_orders.sql adds a later date.
     where order_date <= '2026-10-03'
 )

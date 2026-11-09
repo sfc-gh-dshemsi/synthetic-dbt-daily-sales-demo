@@ -1,5 +1,6 @@
--- Same output as client_daily_sales, as a dynamic table that Snowflake keeps
--- fresh on its own. target_lag is required on dbt 1.9.4 and 1.10.15.
+-- Same output as fct_client_daily_sales, as a dynamic table that Snowflake keeps
+-- fresh on its own (target_lag). Omitting target_lag so dbt triggers the refresh
+-- needs dbt-snowflake 1.11.5 or later; this project runs on dbt 1.9.4.
 {{ config(
     materialized='dynamic_table',
     snowflake_warehouse='COMPUTE_WH',
@@ -12,5 +13,5 @@ select
     order_date,
     count(*) as order_count,
     sum(amount) as sales_amount
-from {{ ref('stg_orders') }}
+from {{ ref('int_orders_enriched') }}
 group by client_id, order_date

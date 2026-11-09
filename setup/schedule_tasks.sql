@@ -17,7 +17,7 @@ create or alter task SYNTHETIC_DBT_DAILY_SALES_DEMO.PROD.DBT_SLICE_RERUN
   after SYNTHETIC_DBT_DAILY_SALES_DEMO.PROD.DBT_DAILY_BUILD
 as
   execute dbt project SYNTHETIC_DBT_DAILY_SALES_DEMO.PROD.SYNTHETIC_DBT_PROJECT
-    args = 'run --select client_daily_sales_incremental --target prod --vars "{client_id: CLIENT_B, start_date: 2026-10-04, end_date: 2026-10-04}"';
+    args = 'run --select fct_client_daily_sales_incremental --target prod --vars "{client_id: CLIENT_B, start_date: 2026-10-04, end_date: 2026-10-04}"';
 
 -- Run the graph once on demand, without resuming the schedule:
 --   alter task SYNTHETIC_DBT_DAILY_SALES_DEMO.PROD.DBT_SLICE_RERUN resume;

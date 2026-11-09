@@ -5,6 +5,9 @@ profile: synthetic_daily_sales_demo
 
 model-paths: ["models"]
 test-paths: ["tests"]
+snapshot-paths: ["snapshots"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
 
 # Runtime inputs. Override per run with --vars, for example:
 #   --vars '{client_id: CLIENT_B, start_date: 2026-10-04, end_date: 2026-10-04}'
@@ -16,8 +19,20 @@ vars:
   show_failing_test: false
   max_order_amount: 50
 
+# Each layer gets its own schema; macros/generate_schema_name.sql decides the
+# final name per target (dev: DEV_STAGING, DEV_MARTS, DEV_HISTORY;
+# prod: STAGING, MARTS, HISTORY).
 models:
   synthetic_daily_sales_demo:
-    +materialized: view
-    client_daily_sales:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +materialized: ephemeral
+    marts:
+      +schema: marts
       +materialized: table
+
+seeds:
+  synthetic_daily_sales_demo:
+    +schema: staging

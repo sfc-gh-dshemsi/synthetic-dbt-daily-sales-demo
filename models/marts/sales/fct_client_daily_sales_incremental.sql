@@ -1,4 +1,4 @@
--- Same output as client_daily_sales, built incrementally.
+-- Same output as fct_client_daily_sales, built incrementally.
 -- On a rerun, delete+insert replaces only the client/day keys in the selected
 -- slice, similar to a scoped delete / recompute / insert procedure.
 {{ config(
@@ -13,8 +13,10 @@ select
     order_date,
     count(*) as order_count,
     sum(amount) as sales_amount
-from {{ ref('stg_orders') }}
+from {{ ref('int_orders_enriched') }}
 {% if is_incremental() %}
+-- The vars are pasted into the SQL as text. That's fine for trusted operator
+-- inputs like these; don't use this pattern for values a user can type in.
 where order_date between '{{ var("start_date") }}' and '{{ var("end_date") }}'
   {% if var("client_id") %}
   and client_id = '{{ var("client_id") }}'

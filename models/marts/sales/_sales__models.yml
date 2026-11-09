@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: dim_client
+    description: One row per client with its current tier and region name. Use hist_clients for tier history.
+    columns:
+      - name: client_id
+        data_tests:
+          - not_null
+          - unique
+  - name: fct_client_daily_sales
+    description: One row per client and calendar date. Full rebuild on every run.
+    columns:
+      - name: client_day_key
+        data_tests:
+          - not_null
+          - unique
+      - name: client_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_client')
+              field: client_id
+      - name: order_date
+        data_tests:
+          - not_null
+  - name: fct_client_daily_sales_incremental
+    description: Incremental version of fct_client_daily_sales; reruns replace one client/date slice.
+    columns:
+      - name: client_day_key
+        data_tests:
+          - not_null
+          - unique
+  - name: fct_client_daily_sales_dt
+    description: Dynamic table version of fct_client_daily_sales, refreshed by Snowflake.
+    columns:
+      - name: client_day_key
+        data_tests:
+          - not_null
+          - unique

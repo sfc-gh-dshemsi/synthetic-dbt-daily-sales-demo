@@ -1,0 +1,22 @@
+version: 2
+
+sources:
+  - name: shop
+    description: Synthetic raw tables for a fictional marketplace, loaded by setup/synthetic_orders.sql.
+    database: SYNTHETIC_DBT_DAILY_SALES_DEMO
+    schema: RAW
+    tables:
+      - name: orders
+        description: One row per order, as received from the source system.
+        columns:
+          - name: order_id
+            data_tests:
+              - not_null
+              - unique
+      - name: clients
+        description: One row per client with its current tier. Tier changes overwrite the row; snapshots/hist_clients.sql keeps the history.
+        columns:
+          - name: client_id
+            data_tests:
+              - not_null
+              - unique

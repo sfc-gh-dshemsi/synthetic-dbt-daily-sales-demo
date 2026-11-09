@@ -5,5 +5,5 @@
 {{ config(enabled=var('show_failing_test')) }}
 
 select order_id, client_id, amount
-from {{ ref('stg_orders') }}
+from {{ ref('stg_shop__orders') }}
 where amount > {{ var('max_order_amount') }}
