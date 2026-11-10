@@ -5,11 +5,11 @@
 ![SQL only](https://img.shields.io/badge/SQL-only-informational?style=flat)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat)
 
-A small, self-contained dbt project that runs entirely inside Snowflake. It turns six invented orders into daily client sales, and along the way shows the parts of dbt most teams need: layered models, tests, incremental reruns, snapshots, a dynamic table, dev and prod environments, and a scheduled task.
+A small, self-contained dbt project that runs entirely inside Snowflake. It takes a deliberately messy raw order extract (a re-loaded duplicate, inconsistent casing, a cancelled order, a refund), cleans it, applies one business rule, and produces daily net sales per client. Along the way it shows the parts of dbt most teams need: layered models, tests, incremental reruns, snapshots, a dynamic table, dev and prod environments, and a scheduled task. A tasks-only version of the same pipeline is included for comparison.
 
 All data is synthetic. No external dbt packages, external access integration, or credentials are needed.
 
-**Contents:** [Architecture](#architecture) · [What you'll learn](#what-youll-learn) · [Repository structure](#repository-structure) · [Prerequisites](#prerequisites) · [Install](#install) · [Scenarios](#scenarios) · [Suggested walkthrough](#suggested-walkthrough) · [Reset the lab](#reset-the-lab) · [Verification](#verification) · [Notes](#notes)
+**Contents:** [Architecture](#architecture) · [The transformation](#the-transformation) · [What you'll learn](#what-youll-learn) · [Repository structure](#repository-structure) · [Prerequisites](#prerequisites) · [Install](#install) · [Scenarios](#scenarios) · [Suggested walkthrough](#suggested-walkthrough) · [Reset the lab](#reset-the-lab) · [Verification](#verification) · [Notes](#notes)
 
 ## Architecture
 
@@ -86,7 +86,7 @@ flowchart LR
     I --> F3
 ```
 
-The three fact models compute the same result three ways so the materializations can be compared side by side. In a real project you'd choose one.
+`fct_client_daily_sales` is the main model. The `_incremental` and `_dt` versions compute the same result with other materializations; they're optional extras for comparison. In a real project you'd choose one.
 
 ### Layers and environments
 
@@ -100,10 +100,41 @@ The three fact models compute the same result three ways so the materializations
 
 `macros/generate_schema_name.sql` routes each layer to its schema per target, so dev never writes into prod. This project uses one database; a project with separate databases per environment adds a `generate_database_name` macro the same way.
 
+## The transformation
+
+Each layer has one job, and each changes something you can see in the data.
+
+| Layer | Model | Job | What changes in this data |
+| --- | --- | --- | --- |
+| Source | `RAW.ORDERS` | Raw extract, as received | 9 rows. A2 is loaded twice, as `' client_a '` / `'Completed'`. A5 is `CANCELLED`. R1 is a 10.00 `REFUNDED` row. |
+| Staging | `stg_shop__orders` | Clean: trim, uppercase ids, lowercase status, keep the latest load per `order_id` | 8 rows. Duplicate A2 removed; `CLIENT_A`, `completed` everywhere. |
+| Intermediate | `int_orders_enriched` | Business rule, defined once: completed orders count, cancelled don't, refunds subtract; add the client's region | A5 dropped; R1 becomes a refund amount; region attached. |
+| Mart | `fct_client_daily_sales` | Aggregate to one row per client and day | CLIENT_B on 2026-10-02: gross 60.00, refund 10.00, **net 50.00**. |
+
+The tests follow the same story. The `unique` test on the raw `order_id` is set to **warn**: the build reports the known duplicate (`WARN=1`) without failing. The same test on `stg_shop__orders` is strict, which proves staging fixed it. `tests/expected_daily_sales.sql` checks the mart's exact numbers, so a wrong rule (counting the cancelled order, double-counting A2, or ignoring the refund) fails the build.
+
+### dbt vs. tasks only
+
+`setup/tasks_only_example.sql` builds the same pipeline with chained tasks and no dbt, in its own `TASKS_ONLY` schema. Both produce identical results. The difference is what you maintain:
+
+| Concern | Tasks only | dbt project |
+| --- | --- | --- |
+| Build each table | Hand-written `CREATE OR REPLACE TABLE ... AS` | `select` + `materialized` config |
+| Run order | Wired by hand with `AFTER` | Inferred from `ref()` |
+| Data checks | Procedural code that raises an error | Tests declared in YAML, reported per run |
+| Dev and prod | A second copy of the SQL, or string swapping | `--target dev` / `--target prod` |
+| Rerun one slice | Custom procedure | `--vars` on an incremental model |
+| History of a changing attribute | Custom merge logic | `snapshot` |
+| Lineage and docs | None built in | DAG and compiled SQL in the workspace |
+
+Tasks are still used with dbt: a task schedules `EXECUTE DBT PROJECT` (scenario 5). dbt defines **what** to build; the task decides **when**.
+
 ## What you'll learn
 
 | Concept | Where to look |
 | --- | --- |
+| Cleaning and deduplicating raw data in staging | `models/staging/shop/stg_shop__orders.sql` |
+| A business rule defined once and reused | `models/intermediate/int_orders_enriched.sql` |
 | Sources, `source()`, `ref()`, and the DAG | `models/staging/shop/` → `models/intermediate/` → `models/marts/sales/` |
 | Staging, intermediate, and mart layers | `models/` |
 | Materializations: view, ephemeral, table, incremental, dynamic table | `dbt_project.yml`, model `config()` blocks |
@@ -111,10 +142,11 @@ The three fact models compute the same result three ways so the materializations
 | Snapshot (SCD Type 2) history of a changing attribute | `snapshots/hist_clients.sql` |
 | Seed: reference data from CSV | `seeds/regions.csv` |
 | Macro: per-environment schema names | `macros/generate_schema_name.sql` |
-| Tests: built-in, relationships, accepted values, custom generic, exact result | `_shop__models.yml`, `_sales__models.yml`, `tests/` |
+| Tests: built-in, relationships, accepted values, warn severity, custom generic, exact result | `_shop__models.yml`, `_sales__models.yml`, `tests/` |
 | A planned failing test to fix live | `tests/demo_order_amount_cap.sql` |
 | Dev and prod targets from one codebase | `dbt_projects_profiles.yml` |
 | Scheduling with tasks | `setup/schedule_tasks.sql` |
+| The same pipeline without dbt | `setup/tasks_only_example.sql` |
 
 ## Repository structure
 
@@ -123,8 +155,8 @@ The three fact models compute the same result three ways so the materializations
 ├── dbt_project.yml               Project config: layers, schemas, vars
 ├── dbt_projects_profiles.yml     dev and prod targets for dbt Projects on Snowflake
 ├── models/
-│   ├── staging/shop/             stg_  typed views, one per source table
-│   ├── intermediate/             int_  shared logic (ephemeral)
+│   ├── staging/shop/             stg_  cleaned views, one per source table
+│   ├── intermediate/             int_  business rule (ephemeral)
 │   └── marts/sales/              fct_ / dim_  business-ready tables
 ├── snapshots/                    hist_ SCD Type 2 history
 ├── seeds/                        Static reference data
@@ -132,7 +164,7 @@ The three fact models compute the same result three ways so the materializations
 ├── tests/
 │   ├── generic/                  Custom generic tests
 │   └── *.sql                     Singular tests
-└── setup/                        Source data, demo changes, task SQL
+└── setup/                        Source data, demo changes, task SQL, tasks-only comparison
 ```
 
 ## Prerequisites
@@ -186,15 +218,17 @@ snow dbt execute -c default --database SYNTHETIC_DBT_DAILY_SALES_DEMO --schema P
   SYNTHETIC_DBT_PROJECT build --target dev
 ```
 
+The build ends with `PASS=34 WARN=1 ERROR=0`. The warning is the raw duplicate, by design.
+
 Expected `DEV_MARTS.FCT_CLIENT_DAILY_SALES` after the first build:
 
-| Client | Order date | Orders | Sales amount |
-| --- | --- | ---: | ---: |
-| CLIENT_A | 2026-10-01 | 2 | 30.00 |
-| CLIENT_A | 2026-10-02 | 1 | 7.00 |
-| CLIENT_A | 2026-10-03 | 1 | 99.00 |
-| CLIENT_B | 2026-10-01 | 1 | 40.00 |
-| CLIENT_B | 2026-10-02 | 1 | 60.00 |
+| Client | Region | Order date | Orders | Gross | Refunds | Net |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| CLIENT_A | West | 2026-10-01 | 2 | 30.00 | 0.00 | 30.00 |
+| CLIENT_A | West | 2026-10-02 | 1 | 7.00 | 0.00 | 7.00 |
+| CLIENT_A | West | 2026-10-03 | 1 | 99.00 | 0.00 | 99.00 |
+| CLIENT_B | East | 2026-10-01 | 1 | 40.00 | 0.00 | 40.00 |
+| CLIENT_B | East | 2026-10-02 | 1 | 60.00 | 10.00 | 50.00 |
 
 ## Scenarios
 
@@ -228,7 +262,7 @@ demo_dbt run --select fct_client_daily_sales_incremental --target dev \
 
 dbt deletes only the `client_day_key` values in the slice, then inserts the recomputed rows. Only the incremental model changes; `fct_client_daily_sales` catches up on the next `build`, and the dynamic table on its next refresh. A key that disappears from the source inside the slice is not deleted, so decide how a real job should handle that.
 
-> ⚠️ Run `setup/new_orders.sql` only once per lab. A second run inserts a duplicate `order_id`, and the `unique` test fails. [Reset the lab](#reset-the-lab) to run it again.
+> Running `setup/new_orders.sql` twice inserts B3 a second time. Staging keeps one copy, so results don't change, but the raw `unique` warning count rises to 2. [Reset the lab](#reset-the-lab) for a clean start.
 
 ### 3. Keep history with a snapshot
 
@@ -247,7 +281,7 @@ snow sql -c default -q "select client_id, tier, dbt_valid_from, dbt_valid_to
 
 `dim_client` shows only the current tier after its next build; the snapshot keeps the history.
 
-### 4. Dynamic table vs. dbt-run table
+### 4. Dynamic table vs. dbt-run table (optional)
 
 `fct_client_daily_sales_dt` is refreshed by Snowflake on its `target_lag` (1 day), not when dbt runs, so right after scenario 2 it still shows the earlier rows. Snowflake's documentation lists dbt-snowflake adapter v1.11.5 or later for omitting `target_lag` so that dbt triggers the refresh instead ([Use dynamic tables in dbt](https://docs.snowflake.com/en/user-guide/dynamic-tables/dbt)). This project runs on dbt 1.9.4, so it sets `target_lag`.
 
@@ -284,17 +318,18 @@ ALTER TASK SYNTHETIC_DBT_DAILY_SALES_DEMO.PROD.DBT_SLICE_RERUN SUSPEND;
 
 ## Suggested walkthrough
 
-A 30-minute order for presenting the project:
+A 30-minute order that follows one path, messy raw data to a scheduled mart:
 
 | Time | Segment | Show |
 | --- | --- | --- |
-| 0–3 | Overview | The architecture diagram and what the six orders become |
-| 3–9 | Layers and the DAG | `models/` folders, `source()` / `ref()`, **Compile**, DAG tab, compiled SQL |
-| 9–14 | Build and tests | **Build** on dev, test YAML, then scenario 1 |
-| 14–19 | Incremental rerun | Scenario 2 |
-| 19–23 | Snapshot | Scenario 3 |
-| 23–27 | Environments and scheduling | `dbt_projects_profiles.yml`, the schema macro, scenario 5 |
-| 27–30 | Close | Pick one real transformation to try next |
+| 0–4 | The problem | Query `RAW.ORDERS`: the duplicate, the casing, the cancelled order, the refund |
+| 4–10 | Clean, then apply the rule | `stg_shop__orders` → `int_orders_enriched` → `fct_client_daily_sales`; **Compile**, DAG tab, compiled SQL |
+| 10–16 | Build and tests | **Build** on dev; the raw duplicate warns, staging's test passes; then scenario 1 |
+| 16–20 | Incremental rerun | Scenario 2, mapped to a delete / recompute / insert procedure |
+| 20–26 | Environments and scheduling | `dbt_projects_profiles.yml`, the schema macro, scenario 5 |
+| 26–30 | dbt vs. tasks only | `setup/tasks_only_example.sql` next to the dbt models |
+
+Keep the snapshot (scenario 3) and the dynamic table (scenario 4) for questions.
 
 Before presenting, [reset the lab](#reset-the-lab) if earlier rehearsals changed the source data.
 
@@ -310,19 +345,19 @@ Then repeat [Option B](#option-b-snowflake-cli) from the setup scripts onward.
 
 ## Verification
 
-Tested end to end on November 9, 2026, from a fresh clone of this repository into an empty lab database, on dbt 1.9.4:
+Tested end to end on November 10, 2026, into an empty lab database, on dbt 1.9.4:
 
 | Step | Result |
 | --- | --- |
-| Setup scripts, deploy, `build --target dev` | `PASS=34 WARN=0 ERROR=0`; mart matched the expected rows above |
+| Setup scripts, deploy, `build --target dev` | `PASS=34 WARN=1 ERROR=0` (warning: raw duplicate); 9 raw rows → 8 staged; mart matched the expected rows above |
 | Scenario 1: failing test | Disabled by default; failed with 2 results at cap 50; passed at cap 1000 |
 | Scenario 2: incremental slice | CLIENT_B 2026-10-04 (25.00) added to the incremental model only |
 | Scenario 3: snapshot | CLIENT_B `standard` closed at 2026-10-15; current `gold` row added |
-| Scenario 5: `build --target prod` | `PASS=34 WARN=0 ERROR=0` |
-| Scenario 5: task graph, run once | `DBT_DAILY_BUILD` and `DBT_SLICE_RERUN` both `SUCCEEDED`; left suspended |
-| Reconciliation | Prod marts: 7 orders, 261.00, matching `RAW.ORDERS` |
+| Scenario 5: `build --target prod` | `PASS=34 WARN=1 ERROR=0`; both tasks created suspended |
+| Tasks-only pipeline, run once | `T_STG_ORDERS`, `T_DAILY_SALES`, `T_CHECK_DAILY_SALES` all `SUCCEEDED`; left suspended |
+| dbt vs. tasks only | `MARTS.FCT_CLIENT_DAILY_SALES` and `TASKS_ONLY.CLIENT_DAILY_SALES`: 0 differing rows; both 6 rows, net 251.00 |
 
-Not covered by these checks: the Snowsight DAG view and the workspace OAuth sign-in.
+Not covered by this run: the Snowsight DAG view, the workspace OAuth sign-in, and the scheduled dbt task graph (verified on November 9 with the earlier data).
 
 ## Notes
 

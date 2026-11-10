@@ -9,7 +9,7 @@ models:
           - not_null
           - unique
   - name: fct_client_daily_sales
-    description: One row per client and calendar date. Full rebuild on every run.
+    description: Daily net sales per client and region (completed orders minus refunds; cancelled excluded). One row per client and calendar date. Full rebuild on every run.
     columns:
       - name: client_day_key
         data_tests:

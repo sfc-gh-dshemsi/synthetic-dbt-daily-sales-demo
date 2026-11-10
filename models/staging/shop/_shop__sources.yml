@@ -7,12 +7,16 @@ sources:
     schema: RAW
     tables:
       - name: orders
-        description: One row per order, as received from the source system.
+        description: Raw order extract as received. Can contain re-loaded duplicates, inconsistent casing, cancelled orders, and refunds.
         columns:
           - name: order_id
             data_tests:
               - not_null
-              - unique
+              # Raw data is known to contain re-loaded duplicates. Warn, don't fail:
+              # stg_shop__orders removes them, and its own unique test is strict.
+              - unique:
+                  config:
+                    severity: warn
       - name: clients
         description: One row per client with its current tier. Tier changes overwrite the row; snapshots/hist_clients.sql keeps the history.
         columns:
