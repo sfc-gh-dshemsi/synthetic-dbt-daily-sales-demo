@@ -1,0 +1,12 @@
+# goes to: sales_dbt/models/marts/_marts.yml
+version: 2
+
+models:
+  - name: fct_client_daily_sales
+    columns:
+      - name: client_day_key
+        data_tests: [unique, not_null]
+  - name: fct_client_daily_sales_incremental
+    columns:
+      - name: client_day_key
+        data_tests: [unique, not_null]

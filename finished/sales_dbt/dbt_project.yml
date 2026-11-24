@@ -1,0 +1,25 @@
+# goes to: sales_dbt/dbt_project.yml
+# Step 1: an empty project. A name, where things live, and how each folder gets built.
+name: sales_dbt
+version: '1.0.0'
+profile: sales_dbt
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+
+# Runtime inputs, like procedure parameters. Override per run with --vars, e.g.
+#   --vars '{client_id: CLIENT_B, start_date: 2026-10-04, end_date: 2026-10-04}'
+vars:
+  client_id: null
+  start_date: '1900-01-01'
+  end_date: '2999-12-31'
+
+models:
+  sales_dbt:
+    staging:
+      +materialized: view      # always reflects RAW
+    intermediate:
+      +materialized: view      # the business rule, defined once
+    marts:
+      +materialized: table     # what Metabase reads

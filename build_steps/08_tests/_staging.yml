@@ -1,0 +1,28 @@
+# goes to: sales_dbt/models/staging/_staging.yml
+# Step 8a: tests are declared, not coded. Each one is a query dbt writes for you.
+version: 2
+
+models:
+  - name: stg_orders
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]     # passes: staging removed the duplicate A2
+      - name: client_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_clients')
+              field: client_id
+      - name: status
+        data_tests:
+          - accepted_values:
+              values: ['completed', 'cancelled', 'refunded']
+
+  - name: stg_clients
+    columns:
+      - name: client_id
+        data_tests: [unique, not_null]
+      - name: tier
+        data_tests:
+          - accepted_values:
+              values: ['standard', 'gold']

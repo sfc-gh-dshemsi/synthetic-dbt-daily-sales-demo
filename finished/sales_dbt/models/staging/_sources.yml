@@ -1,0 +1,11 @@
+# goes to: sales_dbt/models/staging/_sources.yml
+# Step 2: tell dbt where the raw data lives. Now a model can say source('raw', 'orders').
+version: 2
+
+sources:
+  - name: raw
+    database: SALES_DBT_DB
+    schema: RAW
+    tables:
+      - name: orders
+      - name: clients

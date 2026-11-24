@@ -1,0 +1,25 @@
+# goes to: sales_dbt/dbt_projects_profiles.yml
+# dbt Projects on Snowflake runs inside your Snowflake session,
+# so account/user are not used and there is no password here.
+# Same account, two targets: only the schema changes.
+sales_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: 'not needed'
+      user: 'not needed'
+      role: SYSADMIN
+      database: SALES_DBT_DB
+      schema: DEV
+      warehouse: SALES_DBT_WH
+      threads: 4
+    prod:
+      type: snowflake
+      account: 'not needed'
+      user: 'not needed'
+      role: SYSADMIN
+      database: SALES_DBT_DB
+      schema: PROD
+      warehouse: SALES_DBT_WH
+      threads: 4
